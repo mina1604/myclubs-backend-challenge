@@ -21,7 +21,7 @@ class DataStore {
   }
 
   saveAll(type: string, data: Object) {
-    var saves = [];
+    const saves = [];
 
     for (let item of data) {
       if (item.id || item.objectId) {
@@ -54,7 +54,7 @@ class DataStore {
   }
 
   batchInsert(type: string, data: Object) {
-    var saves = [];
+    const saves = [];
 
     for (let item of data) {
       saves.push(this.insert(type, item));
@@ -64,7 +64,7 @@ class DataStore {
   }
 
   updateAll(type: string, data: Object) {
-    var saves = [];
+    const saves = [];
 
     _.each(data, item => {
       saves.push(this.update(type, item));
@@ -74,7 +74,7 @@ class DataStore {
   }
 
   signup(email: string, password: string) {
-    var user = {
+    const user = {
       objectId: Date.now() + "user",
       email: email,
       username: email,
@@ -95,7 +95,7 @@ class DataStore {
 
     this.data[type] = this.data[type] || [];
 
-    var objectToUpdate = this.data[type][data.objectId];
+    let objectToUpdate = this.data[type][data.objectId];
     if (objectToUpdate) {
       objectToUpdate = _.extend(objectToUpdate, _.omit(data, "objectId"));
     }
@@ -103,13 +103,16 @@ class DataStore {
     return Promise.resolve(data);
   }
 
-  async getOne(type: string, id: string | Object) {
+  async getOne(config: Object | string, id: string | Object) {
+    const type = typeof config === "object" ? config.type : config;
+    const include = typeof config === "object" ? config.include : undefined;
+
     if (!this.data[type]) this.data[type] = [];
-    var all: Object = this.data[type];
+    const all: Object = this.data[type];
 
     if (typeof id === "object") {
       let result = await this.query(
-        { type, include: id.include },
+        { type, include },
         { objectId: id.objectId }
       );
 
@@ -131,10 +134,10 @@ class DataStore {
   delete(type: string, id: string) {
     if (!this.data[type]) this.data[type] = [];
 
-    var all = this.data[type];
+    const all = this.data[type];
 
-    for (var i in all) {
-      var object = all[i];
+    for (const i in all) {
+      const object = all[i];
       if (object.id === id || object.objectId === id) {
         delete this.data[type][i];
         return Promise.resolve(object);
@@ -145,9 +148,9 @@ class DataStore {
   }
 
   login(username: string, password: string) {
-    var users = _.values(this.data["_User"]);
+    const users = _.values(this.data["_User"]);
 
-    var user = _.find(users, function(user) {
+    const user = _.find(users, function(user) {
       return user.username === username && user.password === password;
     });
 
@@ -159,7 +162,7 @@ class DataStore {
   }
 
   getAll(type: string) {
-    var all = [];
+    let all = [];
     if (type) {
       all = this.data[type];
       if (typeof all === "object") {
@@ -175,8 +178,8 @@ class DataStore {
       if (!options.buffer) {
         return reject(new Error("File buffer is required"));
       }
-      var name = "ftss-" + Date.now() + "-" + options.name;
-      var url = "http://files.parsetfss.com/" + name;
+      const name = "ftss-" + Date.now() + "-" + options.name;
+      const url = "http://files.parsetfss.com/" + name;
       resolve({ name, url });
     });
   }
@@ -209,9 +212,9 @@ class DataStore {
         o[accessor].__type &&
         o[accessor].__type === "Date"
       ) {
-        var dateAccessor = moment(o[accessor].iso);
-        var dateComparator = moment(comparator.iso);
-        var diff = dateAccessor.diff(dateComparator);
+        const dateAccessor = moment(o[accessor].iso);
+        const dateComparator = moment(comparator.iso);
+        const diff = dateAccessor.diff(dateComparator);
         if (operator === "$gte") {
           return diff >= 0;
         }
@@ -325,11 +328,11 @@ class DataStore {
 
     all = this.data[type];
 
-    var include = typeof config === "object" ? config["include"] : undefined;
+    const include = typeof config === "object" ? config["include"] : undefined;
     if (include) {
       // include … resolve parse style pointers to data contained in the mock
-      for (var o in all) {
-        for (var includePart of this.getIncludeParts(include, all[o])) {
+      for (const o in all) {
+        for (const includePart of this.getIncludeParts(include, all[o])) {
           if (this.data[includePart.className]) {
             if (includePart.__type === "Pointer") {
               all[o][includePart.property] = this.data[includePart.className][
@@ -338,7 +341,7 @@ class DataStore {
             }
           } else if (this.data[type][o]) {
             if (typeof config === "object") {
-              var pointer = all[o][config[includePart]];
+              const pointer = all[o][config[includePart]];
               if (pointer && pointer.__type === "Pointer") {
                 all[o][includePart] = this.data[pointer["className"]][
                   pointer["objectId"]
@@ -369,7 +372,7 @@ class DataStore {
          * This checks the queries 'where' part, e.g. check bookings where the partner has a certain objectId.
          * The 'filtered' is an Array in this case, because it’s fed directly into { results: filtered }.
          */
-        var filtered = [];
+        const filtered = [];
         let targetPointerObjectId = params[q].objectId;
         for (let referenceEntity of Object.values(all)) {
           if (

@@ -5,6 +5,8 @@ const {
   submit,
   getTerms,
   getRequired,
+  getAverageUserRating,
+  sanitizeTerms,
   create,
   ERRORS
 } = require("../../src/feedback/feedback");
@@ -35,6 +37,18 @@ describe("feedback", () => {
     __type: "Pointer",
     className: "Partner"
   };
+  const FEEDBACK_PTR1 = {
+    objectId: "feedbackID2",
+    __type: "Pointer",
+    className: "UserFeedback"
+  };
+  const FEEDBACK_PTR2 = {
+    objectId: "feedbackID3",
+    __type: "Pointer",
+    className: "UserFeedback"
+  };
+  const AVERAGE_RATING = 4;
+  const NO_RATING = -1;
   const DATA = {
     _User: {
       userID: { objectId: "userID" }
@@ -78,7 +92,8 @@ describe("feedback", () => {
         status: "reservation",
         member: USER_PTR,
         objectId: "bookingID4",
-        start: Formats.parseDate(moment().add(1, "week"))
+        start: Formats.parseDate(moment().add(1, "week")),
+        feedback: FEEDBACK_PTR1
       },
       bookingID5: {
         partner: PARTNER_PTR,
@@ -86,7 +101,8 @@ describe("feedback", () => {
         status: "active",
         member: USER_PTR,
         objectId: "bookingID5",
-        start: Formats.parseDate(moment().add(2, "days"))
+        start: Formats.parseDate(moment().add(2, "days")),
+        feedback: FEEDBACK_PTR2
       }
     },
     UserFeedback: {
@@ -97,6 +113,26 @@ describe("feedback", () => {
           __type: "Pointer",
           className: "Booking"
         },
+        user: USER_PTR
+      },
+      feedbackID2: {
+        objectId: "feedbackID2",
+        booking: {
+          objectId: "bookingID4",
+          __type: "Pointer",
+          className: "Booking"
+        },
+        value: 5,
+        user: USER_PTR
+      },
+      feedbackID3: {
+        objectId: "feedbackID3",
+        booking: {
+          objectId: "bookingID5",
+          __type: "Pointer",
+          className: "Booking"
+        },
+        value: 3,
         user: USER_PTR
       }
     },
@@ -207,18 +243,73 @@ describe("feedback", () => {
       };
 
       const feedback = await submit(dataStore, payload);
+
       data.Booking.bookingID1.feedback.objectId.should.equal(feedback.objectId);
     });
   });
-  describe('sanitizeTerms', ()=>{
+  describe("getAverageUserRating", () => {
+    it("should return an average value of feedbacks per user", async () => {
+      const data = _.cloneDeep(DATA);
+      const dataStore = new DataStore({ data });
+      const userId = "userID";
+
+      const result = await getAverageUserRating(dataStore, { userId });
+      result.should.equal(AVERAGE_RATING);
+    });
+    it("should fail if no user is provided", async () => {
+      const data = _.cloneDeep(DATA);
+      const dataStore = new DataStore({ data });
+
+      try {
+        const result = await getAverageUserRating(dataStore, {});
+        should.not.exist(result);
+      } catch (e) {
+        e.code.should.equal(ERRORS.USER_REQUIRED.code);
+      }
+    });
+    it("should return -1 if no feedback has been given", async () => {
+      const data = _.cloneDeep(DATA);
+      const dataStore = new DataStore({ data });
+      const userId = "noFeedback";
+
+      const result = await getAverageUserRating(dataStore, { userId });
+      result.should.equal(NO_RATING);
+    });
+  });
+  describe("sanitizeTerms", () => {
     // TODO: unit test this method
-    it('should filter invalid terms', async()=>{
-      // TODO: implement me
-    })
-    it('should only allow values between 0 - 5', async()=>{
-      // TODO: implement me
-    })
-  })
+    it("should filter invalid terms", async () => {
+      const data = _.cloneDeep(DATA);
+      const dataStore = new DataStore({ data });
+      const terms = {
+        term1: "1",
+        term2: 12,
+        term3: 4,
+        term4: -1
+      };
+      const sanitized = await sanitizeTerms(dataStore, {
+        bookingId: data.Booking.bookingID1.objectId,
+        user: USER_PTR,
+        terms
+      });
+      sanitized.should.deepEqual({ term1: 1, term3: 4 });
+    });
+    it("should only allow values between 0 - 5", async () => {
+      const data = _.cloneDeep(DATA);
+      const dataStore = new DataStore({ data });
+      const terms = {
+        term1: -1,
+        term3: 7,
+        term2: 5
+      };
+      const sanitized = await sanitizeTerms(dataStore, {
+        bookingId: data.Booking.bookingID1.objectId,
+        user: USER_PTR,
+        terms
+      });
+      sanitized.should.deepEqual({ term1: 0, term3: 5 });
+    });
+  });
   describe("create", () => {
     it("should allow a rating of 0", async () => {
       const data = _.cloneDeep(DATA);
@@ -291,7 +382,6 @@ describe("feedback", () => {
         e.code.should.equal(ERRORS.VALUE_REQUIRED.code);
       }
     });
-
 
     it("should fail if the user has already created a feedback for this specific booking", async () => {
       const data = _.cloneDeep(DATA);
