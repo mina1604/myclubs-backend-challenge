@@ -32,14 +32,14 @@ class FeedbackService {
   getRequired = async options => {
     return getRequired(this.dataStore, options);
   };
+  getAverageUserRating = async options => {
+    return getAverageUserRating(this.dataStore, options);
+  };
 }
 
 /*
-
     get all active bookings without feedback
-
 */
-
 const getLastBooking = async (dataStore, { user }) => {
   const userPtr = {
     __type: "Pointer",
@@ -58,6 +58,7 @@ const getLastBooking = async (dataStore, { user }) => {
   );
   return results[0];
 };
+
 /*
   connect booking and feedback via pointers
 */
@@ -74,6 +75,7 @@ const connectBooking = async (dataStore, { feedback, bookingId }) => {
 
   return booking;
 };
+
 /*
   get bookings for which the user needs to provide feedback
 */
@@ -98,20 +100,21 @@ const submit = async (
     value
   });
   const booking = await connectBooking(dataStore, { feedback, bookingId });
-
   return feedback;
 };
+
 /*
   should cap the value to a number between 0 - 5
 */
 const capValue = value => {
   return Math.max(0, Math.min(5, Number(value)));
 };
+
 /*
   ensure only valid terms can be supplied
 */
 const sanitizeTerms = async (dataStore, { terms, user, bookingId }) => {
-  const activeTerms = await getTerms(dataStore, { user, bookingId });
+  const activeTerms = await getTerms(dataStore, { bookingId });
   let validTerms = {};
   for (let key in terms) {
     let active = null;
@@ -126,6 +129,7 @@ const sanitizeTerms = async (dataStore, { terms, user, bookingId }) => {
   }
   return validTerms;
 };
+
 /*
   create a new feedback
 */
@@ -135,6 +139,9 @@ const create = async (
 ) => {
   if (!bookingId) {
     throw new ApiError(ERRORS.BOOKING_REQUIRED);
+  }
+  if (!user) {
+    throw new ApiError(ERRORS.USER_REQUIRED);
   }
   if (isNaN(value)) {
     throw new ApiError(ERRORS.VALUE_REQUIRED);
@@ -181,21 +188,17 @@ const create = async (
   return feedback;
 };
 
-/*
-    TODO: refactor to use datastore.getOne with the activity include
-*/
 const getBooking = async (dataStore, bookingId) => {
-  const { results } = await dataStore.query(
+  return await dataStore.getOne(
     { type: "Booking", include: "activity" },
     { objectId: bookingId }
   );
-  return results[0];
 };
 
 /*
     get all active terms terms for a booking
 */
-const getTerms = async (dataStore, { user, bookingId }) => {
+const getTerms = async (dataStore, { bookingId }) => {
   const booking = await getBooking(dataStore, bookingId);
   if (!booking) {
     throw new ApiError(ERRORS.BOOKING_NOT_FOUND);
@@ -214,14 +217,43 @@ const save = async (dataStore, feedback) => {
   return feedback;
 };
 
-const getAvargeUserRating = (dataStore, userId) => {
-  // TODO: implement me
+const getAverageUserRating = async (dataStore, { userId }) => {
+  if (!userId) {
+    throw new ApiError(ERRORS.USER_REQUIRED);
+  }
+  const userPtr = {
+    __type: "Pointer",
+    className: "_User",
+    objectId: userId
+  };
+  const { results } = await dataStore.query(
+    { type: CLASS_NAME },
+    { user: userPtr }
+  );
+
+  const validFeedbacks = results.filter((feedback, index) => feedback.value);
+
+  if (
+    !results ||
+    results.length === 0 ||
+    !validFeedbacks ||
+    validFeedbacks.length === 0
+  ) {
+    return -1;
+  }
+
+  const feedbackVal = validFeedbacks
+    .map(feedback => feedback.value)
+    .reduce((prev, elem) => prev + elem);
+
+  return Math.round(feedbackVal * 10) / (validFeedbacks.length * 10);
 };
 
 module.exports = {
   FeedbackService,
   getTerms,
   sanitizeTerms,
+  getAverageUserRating,
   capValue,
   submit,
   getRequired,
